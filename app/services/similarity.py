@@ -152,6 +152,7 @@ def _download_to_disk(url: str, dataset_id: str) -> None:
 
 
 def _start_download_thread(url: str, dataset_id: str) -> None:
+    logger.info("Starting download worker for dataset %s", dataset_id)
     thread = threading.Thread(
         target=_download_to_disk,
         args=(url, dataset_id),
@@ -172,7 +173,9 @@ def acknowledge_similarity_request(
 
     logger.info("Received similarity request for dataset %s", dataset_id)
     _probe_remote_url(str(request.fingerprint_url), timeout=settings.remote_url_timeout_seconds)
+    logger.info("Fingerprint URL validated for dataset %s", dataset_id)
     _start_download_thread(str(request.fingerprint_url), dataset_id)
+    logger.info("Similarity request for dataset %s acknowledged", dataset_id)
 
     return FingerprintSimilarityResponse(
         dataset_id=dataset_id,

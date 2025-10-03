@@ -1,5 +1,3 @@
-"""FastAPI application setup."""
-
 import logging
 
 from fastapi import FastAPI
@@ -9,10 +7,23 @@ from .routes import health_router, similarity_router
 
 
 def create_app() -> FastAPI:
-    """Build and configure the FastAPI application."""
 
     settings = get_settings()
-    logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+    log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    logging.basicConfig(level=log_level)
+
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setLevel(log_level)
+        formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
+
+    root_logger.setLevel(log_level)
+
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(logger_name).setLevel(log_level)
 
     app = FastAPI(
         title=settings.api_title,
@@ -28,7 +39,6 @@ app = create_app()
 
 
 def run() -> None:
-    """Run the API using uvicorn."""
 
     import uvicorn
 

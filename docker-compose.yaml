@@ -1,4 +1,19 @@
 services:
+  similarity-api:
+    build: .
+    container_name: similarity-api
+    environment:
+      LOG_LEVEL: INFO
+      LOCAL_MINIO_ENDPOINT: minio-local:9000
+      LOCAL_MINIO_ACCESS_KEY: localadmin
+      LOCAL_MINIO_SECRET_KEY: localsecret123
+      LOCAL_MINIO_BUCKET: pistis
+    ports:
+      - "8000:8000"
+    depends_on:
+      - minio-local
+      - minio-remote
+
   minio-local:
     image: quay.io/minio/minio:latest
     container_name: minio-local
@@ -7,8 +22,8 @@ services:
       MINIO_ROOT_USER: localadmin
       MINIO_ROOT_PASSWORD: localsecret123
     ports:
-      - "9000:9000"   # S3 API
-      - "9090:9090"   # Console UI
+      - "9000:9000"
+      - "9090:9090"
     volumes:
       - minio-local-data:/data
 
@@ -20,8 +35,8 @@ services:
       MINIO_ROOT_USER: remoteadmin
       MINIO_ROOT_PASSWORD: remotesecret123
     ports:
-      - "9002:9000"   # S3 API
-      - "9092:9090"   # Console UI
+      - "9002:9000"
+      - "9092:9090"
     volumes:
       - minio-remote-data:/data
 
