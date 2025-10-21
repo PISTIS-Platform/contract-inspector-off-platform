@@ -1,0 +1,358 @@
+openapi: 3.0.3
+info:
+  title: Fingerprint Similarity Service
+  description: |
+    A FastAPI-based microservice for processing and storing contract fingerprints with similarity computation.
+    Part of the PISTIS off-platform contract inspection component.
+
+    ## Features
+    - Asynchronous fingerprint processing
+    - MinHash-based Jaccard similarity computation
+    - Search API for retrieving similarity results
+    - MinIO S3-compatible object storage
+
+  version: 0.1.0
+  contact:
+    name: PISTIS Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://pistis-market.eu/srv/contract-inspector-off-platform
+    description: Production server
+
+tags:
+  - name: health
+    description: Service health monitoring
+  - name: similarity
+    description: Fingerprint similarity processing
+  - name: search
+    description: Search for similarity results
+
+paths:
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health Check
+      description: Returns the current health status of the service
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required:
+                  - status
+
+  /similarity:
+    post:
+      tags:
+        - similarity
+      summary: Submit Fingerprint for Similarity Processing
+      description: |
+        Accepts a fingerprint URL for asynchronous processing. The service will:
+        1. Validate the URL is accessible
+        2. Download the fingerprint
+        3. Store it in MinIO
+        4. Compute similarities with existing fingerprints
+        5. Generate and store similarity results
+      operationId: submitSimilarityRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FingerprintSimilarityRequest'
+            examples:
+              basic:
+                summary: Basic fingerprint submission
+                value:
+                  fingerprint_url: "https://storage.example.com/fingerprints/dataset123.json"
+                  dataset_id: "dataset-123"
+              presigned:
+                summary: Using presigned URL
+                value:
+                  fingerprint_url: "https://minio.example.com/bucket/fingerprint.json?X-Amz-Credential=..."
+                  dataset_id: "contract-2025-01-01"
+      responses:
+        '202':
+          description: Fingerprint request accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FingerprintSimilarityResponse'
+              example:
+                dataset_id: "dataset-123"
+                fingerprint_url: "https://storage.example.com/fingerprints/dataset123.json"
+                status: "accepted"
+                remote_object_available: true
+        '400':
+          description: Invalid request - blank or invalid dataset_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "dataset_id must not be blank"
+        '404':
+          description: Fingerprint URL is not accessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Fingerprint URL returned HTTP 404"
+        '502':
+          description: Network error accessing fingerprint URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Failed to reach fingerprint URL: Connection timeout"
+
+  /search:
+    get:
+      tags:
+        - search
+      summary: Search for Similarity Results
+      description: |
+        Retrieves similarity results for a specific dataset by its ID.
+        Returns the dataset metadata along with all fingerprints that were
+        found to be similar based on the configured similarity threshold.
+      operationId: searchSimilarityResults
+      parameters:
+        - name: dataset_id
+          in: query
+          required: true
+          description: The dataset identifier to search for
+          schema:
+            type: string
+            minLength: 1
+          example: "dataset-123"
+      responses:
+        '200':
+          description: Similarity results found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilaritySearchResponse'
+              examples:
+                with_matches:
+                  summary: Dataset with similarity matches
+                  value:
+                    dataset_id: "dataset-123"
+                    status: "completed"
+                    fingerprint_object: "fingerprints/dataset-123/dataset123.json"
+                    source_url: "https://storage.example.com/fingerprints/dataset123.json"
+                    generated_at: "2025-10-21T14:30:45Z"
+                    matches:
+                      - dataset_id: "dataset-456"
+                        similarity_score: 0.9234
+                        algorithm: "adhoc_minhash"
+                        source_url: "https://storage.example.com/fingerprints/dataset456.json"
+                      - dataset_id: "dataset-789"
+                        similarity_score: 0.7891
+                        algorithm: "adhoc_minhash"
+                        source_url: "https://storage.example.com/fingerprints/dataset789.json"
+                    match_count: 2
+                no_matches:
+                  summary: Dataset with no matches
+                  value:
+                    dataset_id: "dataset-999"
+                    status: "completed"
+                    fingerprint_object: "fingerprints/dataset-999/dataset999.json"
+                    source_url: "https://storage.example.com/fingerprints/dataset999.json"
+                    generated_at: "2025-10-21T15:00:00Z"
+                    matches: []
+                    match_count: 0
+        '400':
+          description: Invalid request - blank or invalid dataset_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "dataset_id must not be blank"
+        '404':
+          description: No similarity results found for the dataset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "No similarity results found for dataset: dataset-123"
+        '422':
+          description: Validation error - missing required parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+components:
+  schemas:
+    FingerprintSimilarityRequest:
+      type: object
+      required:
+        - fingerprint_url
+        - dataset_id
+      properties:
+        fingerprint_url:
+          type: string
+          format: uri
+          description: Presigned URL pointing to the remote fingerprint object
+          example: "https://storage.example.com/fingerprints/dataset123.json"
+        dataset_id:
+          type: string
+          minLength: 1
+          description: Dataset identifier associated with the fingerprint payload
+          example: "dataset-123"
+
+    FingerprintSimilarityResponse:
+      type: object
+      required:
+        - dataset_id
+        - fingerprint_url
+        - status
+        - remote_object_available
+      properties:
+        dataset_id:
+          type: string
+          description: Dataset identifier acknowledged by the service
+          example: "dataset-123"
+        fingerprint_url:
+          type: string
+          format: uri
+          description: Fingerprint URL that was validated
+          example: "https://storage.example.com/fingerprints/dataset123.json"
+        status:
+          type: string
+          description: Current processing state of the similarity request
+          enum:
+            - accepted
+            - acknowledged
+          example: "accepted"
+        remote_object_available:
+          type: boolean
+          description: Whether the provided URL could be reached successfully
+          example: true
+
+    SimilarityMatch:
+      type: object
+      required:
+        - dataset_id
+        - similarity_score
+        - algorithm
+        - source_url
+      properties:
+        dataset_id:
+          type: string
+          description: Dataset identifier of the similar fingerprint
+          example: "dataset-456"
+        similarity_score:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: Jaccard similarity score (0.0 to 1.0), where 1.0 means identical
+          example: 0.9234
+        algorithm:
+          type: string
+          description: MinHash algorithm used for the fingerprint
+          enum:
+            - adhoc_minhash
+            - datasketch_minhash
+          example: "adhoc_minhash"
+        source_url:
+          type: string
+          description: Original source URL of the matched fingerprint
+          example: "https://storage.example.com/fingerprints/dataset456.json"
+
+    SimilaritySearchResponse:
+      type: object
+      required:
+        - dataset_id
+        - status
+        - matches
+        - match_count
+      properties:
+        dataset_id:
+          type: string
+          description: The dataset identifier that was searched
+          example: "dataset-123"
+        status:
+          type: string
+          description: Status of the similarity result
+          enum:
+            - completed
+            - processing
+            - not_found
+            - invalid
+          example: "completed"
+        fingerprint_object:
+          type: string
+          nullable: true
+          description: MinIO object path of the fingerprint
+          example: "fingerprints/dataset-123/dataset123.json"
+        source_url:
+          type: string
+          nullable: true
+          description: Original source URL of the fingerprint
+          example: "https://storage.example.com/fingerprints/dataset123.json"
+        generated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when the result was generated
+          example: "2025-10-21T14:30:45Z"
+        matches:
+          type: array
+          description: List of similar fingerprints found
+          items:
+            $ref: '#/components/schemas/SimilarityMatch'
+        match_count:
+          type: integer
+          minimum: 0
+          description: Total number of matches found
+          example: 2
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message describing what went wrong
+          example: "dataset_id must not be blank"
+
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+                description: Location of the error in the request
+              msg:
+                type: string
+                description: Error message
+              type:
+                type: string
+                description: Error type

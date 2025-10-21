@@ -25,6 +25,7 @@ class Settings:
 
         self.fingerprint_prefix = os.getenv("FINGERPRINT_PREFIX", "fingerprints/")
         self.similarity_result_prefix = os.getenv("SIMILARITY_RESULT_PREFIX", "similarity/")
+        self.similarity_threshold = _float_env("SIMILARITY_THRESHOLD", default=0.7)
 
         # Used only for tests
         self.remote_minio_bucket = os.getenv("REMOTE_MINIO_BUCKET", "pistis")
@@ -56,6 +57,16 @@ def _bool_env(name: str, *, default: bool) -> bool:
     if raw is None:
         return default
     return raw.lower() in {"1", "true", "yes", "on"}
+
+
+def _float_env(name: str, *, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 @lru_cache

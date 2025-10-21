@@ -11,10 +11,12 @@ from urllib.parse import urlparse
 
 import requests
 from fastapi import HTTPException
+from minio.error import S3Error
 
 from ..config import get_settings
 from ..schemas import FingerprintSimilarityRequest, FingerprintSimilarityResponse
 from .minio_service import get_minio_client, store_object
+from .minhash_similarity import FingerprintData, find_similar_fingerprints
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -101,6 +103,67 @@ def _fetch_remote_payload(url: str) -> tuple[bytes, str]:
     return data, content_type
 
 
+def _fetch_existing_fingerprints(client, bucket: str) -> list[FingerprintData]:
+    """Fetch all existing fingerprints from MinIO.
+
+    Args:
+        client: MinIO client instance
+        bucket: Bucket name
+
+    Returns:
+        List of FingerprintData objects for all fingerprints in storage
+    """
+    fingerprints = []
+    prefix = settings.fingerprint_prefix.strip("/")
+
+    try:
+        objects = client.list_objects(bucket, prefix=prefix, recursive=True)
+
+        for obj in objects:
+            # Skip directories and non-JSON files
+            if obj.object_name.endswith("/"):
+                continue
+
+            # Only process JSON fingerprint files (from Airflow DAG)
+            if not obj.object_name.endswith(".json"):
+                continue
+
+            try:
+                # Read the fingerprint file
+                response = client.get_object(bucket, obj.object_name)
+                data = response.read()
+                response.close()
+                response.release_conn()
+
+                # Parse JSON to extract dataset_id
+                parsed = json.loads(data)
+                extracted_dataset_id = parsed.get("dataset_id", "unknown")
+                source_url = parsed.get("source_url", obj.object_name)
+
+                # Parse fingerprint data
+                fingerprint_data = FingerprintData.from_json(
+                    data,
+                    dataset_id=extracted_dataset_id,
+                    source_url=source_url,
+                )
+                fingerprints.append(fingerprint_data)
+
+                logger.debug("Loaded fingerprint for dataset %s from %s", extracted_dataset_id, obj.object_name)
+
+            except (ValueError, json.JSONDecodeError) as exc:
+                logger.warning("Failed to parse fingerprint %s: %s", obj.object_name, exc)
+                continue
+            except S3Error as exc:
+                logger.warning("Failed to read fingerprint %s: %s", obj.object_name, exc)
+                continue
+
+    except S3Error as exc:
+        logger.error("Failed to list fingerprints from %s/%s: %s", bucket, prefix, exc)
+
+    logger.info("Loaded %d existing fingerprints for comparison", len(fingerprints))
+    return fingerprints
+
+
 def _download_to_disk(url: str, dataset_id: str) -> None:
     try:
         fingerprint_payload, content_type = _fetch_remote_payload(url)
@@ -127,17 +190,50 @@ def _download_to_disk(url: str, dataset_id: str) -> None:
         logger.error("Failed to store fingerprint for dataset %s: %s", dataset_id, exc)
         return
 
+    # Compute similarities with existing fingerprints
+    matches = []
+    try:
+        # Parse the current fingerprint
+        current_fingerprint = FingerprintData.from_json(
+            fingerprint_payload,
+            dataset_id=dataset_id,
+            source_url=url,
+        )
+
+        # Fetch all existing fingerprints
+        existing_fingerprints = _fetch_existing_fingerprints(client, bucket)
+
+        # Find similar fingerprints
+        matches = find_similar_fingerprints(
+            current_fingerprint,
+            existing_fingerprints,
+            threshold=settings.similarity_threshold,
+        )
+
+        logger.info("Found %d similar fingerprints for dataset %s", len(matches), dataset_id)
+        for match in matches:
+            logger.info(
+                "  - Dataset %s: similarity=%.4f",
+                match["dataset_id"],
+                match["similarity_score"],
+            )
+
+    except ValueError as exc:
+        logger.error("Failed to compute similarities for dataset %s: %s", dataset_id, exc)
+    except Exception as exc:  # pragma: no cover
+        logger.error("Unexpected error during similarity computation for dataset %s: %s", dataset_id, exc)
+
     similarity_payload = {
         "dataset_id": dataset_id,
         "fingerprint_object": fingerprint_object,
         "source_url": url,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "status": "completed",
-        "matches": [],
+        "matches": matches,
     }
     similarity_bytes = json.dumps(similarity_payload, indent=2).encode("utf-8")
     similarity_object = _similarity_object_name(dataset_id, fingerprint_filename)
-    logger.info("Writing similarity stub for dataset %s to %s/%s", dataset_id, bucket, similarity_object)
+    logger.info("Writing similarity result for dataset %s to %s/%s", dataset_id, bucket, similarity_object)
 
     try:
         store_object(

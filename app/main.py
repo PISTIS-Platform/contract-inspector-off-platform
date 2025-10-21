@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 
 from .config import get_settings
-from .routes import health_router, similarity_router
+from .routes import health_router, similarity_router, search_router
 
 
 def create_app() -> FastAPI:
@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
         version=settings.api_version,
     )
     app.include_router(similarity_router)
+    app.include_router(search_router)
     app.include_router(health_router)
     return app
 
