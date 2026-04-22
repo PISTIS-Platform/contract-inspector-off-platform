@@ -73,13 +73,16 @@ paths:
             schema:
               $ref: '#/components/schemas/FingerprintSimilarityRequest'
             examples:
-              basic:
-                summary: Basic fingerprint submission
+              inline:
+                summary: Inline fingerprint submission (preferred)
                 value:
-                  fingerprint_url: "https://storage.example.com/fingerprints/dataset123.json"
                   dataset_id: "dataset-123"
-              presigned:
-                summary: Using presigned URL
+                  fingerprint:
+                    algorithm: "adhoc_minhash"
+                    fingerprint: [12345678, 23456789, 34567890, 45678901]
+                  source_url: "s3://minio.default.svc.cluster.local:9000/pistis/fingerprints/dataset123.adhoc_minhash.json"
+              legacy_url:
+                summary: Legacy presigned URL submission
                 value:
                   fingerprint_url: "https://minio.example.com/bucket/fingerprint.json?X-Amz-Credential=..."
                   dataset_id: "contract-2025-01-01"
@@ -203,14 +206,41 @@ components:
     FingerprintSimilarityRequest:
       type: object
       required:
-        - fingerprint_url
         - dataset_id
+      description: |
+        Exactly one of `fingerprint` (inline payload, preferred) or `fingerprint_url`
+        (legacy presigned URL) must be provided.
       properties:
         fingerprint_url:
           type: string
           format: uri
-          description: Presigned URL pointing to the remote fingerprint object
+          nullable: true
+          description: Presigned URL pointing to the remote fingerprint object (legacy path)
           example: "https://storage.example.com/fingerprints/dataset123.json"
+        fingerprint:
+          type: object
+          nullable: true
+          description: Inline fingerprint payload submitted directly by the producer
+          required:
+            - fingerprint
+            - algorithm
+          properties:
+            fingerprint:
+              type: array
+              description: MinHash signature values
+              items:
+                type: integer
+            algorithm:
+              type: string
+              description: MinHash algorithm used to produce the signature
+              enum:
+                - adhoc_minhash
+                - datasketch_minhash
+        source_url:
+          type: string
+          nullable: true
+          description: Original source location of the fingerprint (preserved in the similarity result)
+          example: "s3://minio.default.svc.cluster.local:9000/pistis/fingerprints/dataset123.adhoc_minhash.json"
         dataset_id:
           type: string
           minLength: 1
@@ -221,7 +251,6 @@ components:
       type: object
       required:
         - dataset_id
-        - fingerprint_url
         - status
         - remote_object_available
       properties:
@@ -232,7 +261,8 @@ components:
         fingerprint_url:
           type: string
           format: uri
-          description: Fingerprint URL that was validated
+          nullable: true
+          description: Fingerprint URL that was validated (null for inline submissions)
           example: "https://storage.example.com/fingerprints/dataset123.json"
         status:
           type: string

@@ -1,7 +1,6 @@
-
-  "fingerprints": [
-    {"id": "fp-001", "value": "0a0b0c0d"},
-    {"id": "fp-002", "value": "1a1b1c1d"},
-    {"id": "fp-003", "value": "2a2b2c2d"}
-  ]
+{
+  "dataset_id": "sample-fixture",
+  "algorithm": "adhoc_minhash",
+  "fingerprint": [11, 22, 33, 44, 55, 66, 77, 88, 99, 110],
+  "source_url": "https://storage.example.com/fingerprints/sample.json"
 }

@@ -180,3 +180,76 @@ def test_similarity_request_missing_remote_object(api_client, dataset_object, mi
             assert exc.code in {"NoSuchKey", "NoSuchBucket"}
         else:
             raise AssertionError(f"Unexpected object present: {bucket}/{obj}")
+
+
+def test_similarity_request_inline_fingerprint(api_client, dataset_payload, minio_local_client):
+    dataset_id = f"inline_{uuid.uuid4().hex[:8]}"
+    fingerprint_dict = json.loads(dataset_payload)
+    source_url = f"s3://minio.default.svc.cluster.local:9000/pistis/fingerprints/{dataset_id}.json"
+
+    response = api_client.post(
+        "/similarity",
+        json={
+            "dataset_id": dataset_id,
+            "fingerprint": fingerprint_dict,
+            "source_url": source_url,
+        },
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["dataset_id"] == dataset_id
+    assert body["fingerprint_url"] is None
+    assert body["status"] == "accepted"
+
+    fingerprint_object = _fingerprint_object_name(dataset_id, f"{dataset_id}.json")
+    assert fingerprint_object == f"fingerprints/{dataset_id}/{dataset_id}.json"
+    _wait_for_minio_object(
+        minio_local_client,
+        SETTINGS.local_minio_bucket,
+        fingerprint_object,
+    )
+    stored_bytes = _read_object(
+        minio_local_client,
+        SETTINGS.local_minio_bucket,
+        fingerprint_object,
+    )
+    assert json.loads(stored_bytes) == fingerprint_dict
+
+    similarity_object = _similarity_object_name(dataset_id, f"{dataset_id}.json")
+    _wait_for_minio_object(
+        minio_local_client,
+        SETTINGS.local_minio_bucket,
+        similarity_object,
+    )
+    similarity_bytes = _read_object(
+        minio_local_client,
+        SETTINGS.local_minio_bucket,
+        similarity_object,
+    )
+    similarity_data = json.loads(similarity_bytes)
+    assert similarity_data["dataset_id"] == dataset_id
+    assert similarity_data["source_url"] == source_url
+    assert similarity_data["fingerprint_object"] == fingerprint_object
+
+
+def test_similarity_request_rejects_both_inline_and_url(api_client):
+    response = api_client.post(
+        "/similarity",
+        json={
+            "dataset_id": "dataset-both",
+            "fingerprint": {"fingerprint": [1, 2, 3], "algorithm": "adhoc_minhash"},
+            "fingerprint_url": "https://example.com/fingerprint.json",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_similarity_request_rejects_neither(api_client):
+    response = api_client.post(
+        "/similarity",
+        json={"dataset_id": "dataset-neither"},
+    )
+
+    assert response.status_code == 422

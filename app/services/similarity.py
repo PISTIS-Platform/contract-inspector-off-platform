@@ -6,7 +6,7 @@ import re
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -164,17 +164,16 @@ def _fetch_existing_fingerprints(client, bucket: str) -> list[FingerprintData]:
     return fingerprints
 
 
-def _download_to_disk(url: str, dataset_id: str) -> None:
-    try:
-        fingerprint_payload, content_type = _fetch_remote_payload(url)
-    except HTTPException as exc:  # pragma: no cover - logged and ignored
-        logger.error("Dataset %s download aborted: %s", dataset_id, exc.detail)
-        return
-
+def _store_and_compute_similarity(
+    dataset_id: str,
+    fingerprint_payload: bytes,
+    fingerprint_filename: str,
+    content_type: str,
+    source_url: Optional[str],
+) -> None:
     client = get_minio_client(settings)
     bucket = settings.local_minio_bucket
 
-    fingerprint_filename = _fingerprint_filename(url)
     fingerprint_object = _fingerprint_object_name(dataset_id, fingerprint_filename)
     logger.info("Storing fingerprint for dataset %s as %s/%s", dataset_id, bucket, fingerprint_object)
 
@@ -197,7 +196,7 @@ def _download_to_disk(url: str, dataset_id: str) -> None:
         current_fingerprint = FingerprintData.from_json(
             fingerprint_payload,
             dataset_id=dataset_id,
-            source_url=url,
+            source_url=source_url or "",
         )
 
         # Fetch all existing fingerprints
@@ -226,7 +225,7 @@ def _download_to_disk(url: str, dataset_id: str) -> None:
     similarity_payload = {
         "dataset_id": dataset_id,
         "fingerprint_object": fingerprint_object,
-        "source_url": url,
+        "source_url": source_url,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "status": "completed",
         "matches": matches,
@@ -247,12 +246,60 @@ def _download_to_disk(url: str, dataset_id: str) -> None:
         logger.error("Failed to store similarity result for dataset %s: %s", dataset_id, exc)
 
 
+def _download_to_disk(url: str, dataset_id: str) -> None:
+    try:
+        fingerprint_payload, content_type = _fetch_remote_payload(url)
+    except HTTPException as exc:  # pragma: no cover - logged and ignored
+        logger.error("Dataset %s download aborted: %s", dataset_id, exc.detail)
+        return
+
+    fingerprint_filename = _fingerprint_filename(url)
+    _store_and_compute_similarity(
+        dataset_id=dataset_id,
+        fingerprint_payload=fingerprint_payload,
+        fingerprint_filename=fingerprint_filename,
+        content_type=content_type,
+        source_url=url,
+    )
+
+
+def _process_inline_fingerprint(
+    dataset_id: str,
+    fingerprint_dict: dict[str, Any],
+    source_url: Optional[str],
+) -> None:
+    fingerprint_payload = json.dumps(fingerprint_dict).encode("utf-8")
+    fingerprint_filename = f"{_safe_dataset_segment(dataset_id)}.json"
+    _store_and_compute_similarity(
+        dataset_id=dataset_id,
+        fingerprint_payload=fingerprint_payload,
+        fingerprint_filename=fingerprint_filename,
+        content_type="application/json",
+        source_url=source_url,
+    )
+
+
 def _start_download_thread(url: str, dataset_id: str) -> None:
     logger.info("Starting download worker for dataset %s", dataset_id)
     thread = threading.Thread(
         target=_download_to_disk,
         args=(url, dataset_id),
         name=f"download-{_safe_dataset_segment(dataset_id)}",
+        daemon=True,
+    )
+    thread.start()
+
+
+def _start_inline_thread(
+    dataset_id: str,
+    fingerprint_dict: dict[str, Any],
+    source_url: Optional[str],
+) -> None:
+    logger.info("Starting inline fingerprint worker for dataset %s", dataset_id)
+    thread = threading.Thread(
+        target=_process_inline_fingerprint,
+        args=(dataset_id, fingerprint_dict, source_url),
+        name=f"inline-{_safe_dataset_segment(dataset_id)}",
         daemon=True,
     )
     thread.start()
@@ -268,6 +315,17 @@ def acknowledge_similarity_request(
         raise HTTPException(status_code=400, detail="dataset_id must not be blank")
 
     logger.info("Received similarity request for dataset %s", dataset_id)
+
+    if request.fingerprint is not None:
+        _start_inline_thread(dataset_id, request.fingerprint, request.source_url)
+        logger.info("Inline similarity request for dataset %s acknowledged", dataset_id)
+        return FingerprintSimilarityResponse(
+            dataset_id=dataset_id,
+            fingerprint_url=None,
+            status="accepted",
+            remote_object_available=True,
+        )
+
     _probe_remote_url(str(request.fingerprint_url), timeout=settings.remote_url_timeout_seconds)
     logger.info("Fingerprint URL validated for dataset %s", dataset_id)
     _start_download_thread(str(request.fingerprint_url), dataset_id)
