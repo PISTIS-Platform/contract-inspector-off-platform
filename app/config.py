@@ -39,6 +39,12 @@ class Settings:
         self.local_minio_secure = _bool_env("LOCAL_MINIO_SECURE", default=False)
         self.local_minio_bucket = os.getenv("LOCAL_MINIO_BUCKET", "pistis")
 
+        self.notifications_url = os.getenv(
+            "NOTIFICATIONS_URL",
+            "http://notifications.default.svc.cluster.local:3000/api/notifications",
+        )
+        self.notifications_timeout_seconds = _int_env("NOTIFICATIONS_TIMEOUT_SECONDS", default=10)
+
 
 
 

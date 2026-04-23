@@ -81,6 +81,8 @@ paths:
                     algorithm: "adhoc_minhash"
                     fingerprint: [12345678, 23456789, 34567890, 45678901]
                   source_url: "s3://minio.default.svc.cluster.local:9000/pistis/fingerprints/dataset123.adhoc_minhash.json"
+                  seller_id: "b023c6ed-e355-4903-a2d3-7fbe2ef751ea"
+                  access_token: "<Keycloak bearer token>"
               legacy_url:
                 summary: Legacy presigned URL submission
                 value:
@@ -246,6 +248,20 @@ components:
           minLength: 1
           description: Dataset identifier associated with the fingerprint payload
           example: "dataset-123"
+        seller_id:
+          type: string
+          nullable: true
+          description: Keycloak user id of the dataset seller; notified when similarity completes
+          example: "b023c6ed-e355-4903-a2d3-7fbe2ef751ea"
+        buyer_id:
+          type: string
+          nullable: true
+          description: Keycloak user id of an interested buyer; notified when provided
+        access_token:
+          type: string
+          nullable: true
+          description: Keycloak bearer token forwarded to the notifications service
+          writeOnly: true
 
     FingerprintSimilarityResponse:
       type: object

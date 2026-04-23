@@ -20,6 +20,18 @@ class FingerprintSimilarityRequest(BaseModel):
         ..., description="Dataset identifier associated with the fingerprint payload.",
         min_length=1,
     )
+    seller_id: Optional[str] = Field(
+        None,
+        description="Keycloak user id of the dataset seller; notified with the similarity result.",
+    )
+    buyer_id: Optional[str] = Field(
+        None,
+        description="Keycloak user id of an interested buyer; notified when provided.",
+    )
+    access_token: Optional[str] = Field(
+        None,
+        description="Keycloak bearer token forwarded to the notifications service.",
+    )
 
     @model_validator(mode="after")
     def _require_exactly_one_source(self) -> "FingerprintSimilarityRequest":
