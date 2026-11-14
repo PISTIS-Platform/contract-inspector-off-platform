@@ -1,0 +1,23 @@
+# Time vocabulary. Timestamps are recognised from their values (ISO-8601 date-times, Unix-epoch integers).
+#
+# reference_tz  zone assumed for date-times without an offset
+# alt_tz        zone the time-zone attack converts into (test attacks only)
+# [epoch]       an integer column is epoch-encoded if every value lies in [min, max] (seconds).
+#               name_keywords are only reported by `python -m inspector.vocab scan`; they do not change the result.
+#               In a user file name_keywords replaces the list, extra_name_keywords adds to it.
+#
+# User files work as for units.toml (mode "extend" / "replace", `python -m inspector.vocab check`).
+
+mode = "replace"
+reference_tz = "Europe/Athens"
+alt_tz = "America/New_York"
+
+[epoch]
+min = 630720000      # 1990-01-01 00:00:00 UTC
+max = 2051222400     # 2035-01-01 00:00:00 UTC
+name_keywords = [
+    # generic
+    "time", "date", "stamp", "ts", "dt", " at",
+    # flight-operations milestone codes (scheduled / estimated / actual in-block, off-block, take-off, ...)
+    "ibt", "obt", "tsat", "ttot", "lstu", "aobt", "sobt", "sibt", "aibt", "tobt", "mcdt", "ldt", "asat", "adpi", "eobt",
+]

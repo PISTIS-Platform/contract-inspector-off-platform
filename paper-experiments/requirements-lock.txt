@@ -1,0 +1,17 @@
+# Pinned versions of the runs (Python 3.11.8, macOS arm64, MPS device), engine dependencies included.
+# pint and tifffile were not recorded; their versions are those installed when this directory was exported.
+numpy==2.4.6
+pandas==3.0.3
+scikit-learn==1.8.0
+scipy==1.17.1
+torch==2.12.0
+sentence-transformers==5.5.1
+mmh3==5.2.1
+bitarray==3.8.1
+Levenshtein==0.27.3
+matplotlib==3.10.9
+seaborn==0.13.2
+openpyxl==3.1.5
+# not captured at run time:
+pint==0.25.3
+tifffile==2026.3.3

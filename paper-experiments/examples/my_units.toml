@@ -1,0 +1,7 @@
+# Extra units for a sensor dataset (extends the shipped vocabulary).
+mode = "extend"
+
+[suffix]
+pa  = { unit = "pascal",     canonical = "pascal", dimension = "pressure", alt = "psi" }
+kpa = { unit = "kilopascal", canonical = "pascal", dimension = "pressure", alt = "pa" }
+psi = { unit = "psi",        canonical = "pascal", dimension = "pressure", alt = "kpa" }

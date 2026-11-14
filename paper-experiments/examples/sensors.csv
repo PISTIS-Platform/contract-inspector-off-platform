@@ -1,0 +1,4 @@
+sensor_id,reading_time,tank_pressure_psi,temperature_mean_c,aircraft_class_c,logged_ts
+s1,2023-08-01T12:00:00+03:00,31.5,20.1,2,1690880400
+s2,2023-08-01T12:10:00,32.0,20.4,2,1690881000
+s3,2023-08-01T12:20:00,31.1,20.9,3,1690881600
