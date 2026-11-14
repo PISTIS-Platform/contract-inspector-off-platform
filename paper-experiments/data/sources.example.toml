@@ -1,0 +1,35 @@
+# Source registry: file names and the column names of your copy of the data.
+# Copy to data/sources.toml (or point PISTIS_SOURCES_CONFIG at your own file); paths are relative to PISTIS_DATA_DIR.
+#
+# The <...> values are placeholders to replace with real column names; the harness stops until you do.
+#   id_anchors            identification columns every partial clone keeps (flight: 2, baggage: 3)
+#   precautious_unit_col  the one time or unit column the "precautious" flight clone keeps
+#   precautious_ts_col    the one timestamp column the "precautious" baggage clone keeps (present in all four views)
+
+[flight_ops]
+filename = "flight/file_01.xlsx"
+id_anchors = ["<identifier column 1>", "<identifier column 2>"]
+precautious_unit_col = "<one milestone time column>"
+
+[arrival_baggage]
+filename = "baggage/file_01.csv"
+id_anchors = ["<identifier column 1>", "<identifier column 2>", "<identifier column 3>"]
+precautious_ts_col = "<one timestamp column present in all four views>"
+
+[departure_baggage]
+filename = "baggage/file_02.csv"
+id_anchors = ["<identifier column 1>", "<identifier column 2>", "<identifier column 3>"]
+precautious_ts_col = "<one timestamp column present in all four views>"
+
+[transfer_baggage]
+filename = "baggage/file_03.csv"
+id_anchors = ["<identifier column 1>", "<identifier column 2>", "<identifier column 3>"]
+precautious_ts_col = "<one timestamp column present in all four views>"
+
+[breakdown_baggage]
+filename = "baggage/file_04.csv"
+id_anchors = ["<identifier column 1>", "<identifier column 2>", "<identifier column 3>"]
+precautious_ts_col = "<one timestamp column present in all four views>"
+
+[weather]
+dirname = "weather"

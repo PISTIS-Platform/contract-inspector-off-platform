@@ -1,0 +1,94 @@
+# Field-name suffixes that mark a measurement unit (temperature_mean_c, wind_max_kmh, ...).
+# Values are converted to the canonical unit of their dimension (6 significant digits) and the suffix is dropped.
+#
+# Add your own suffixes in a separate file (mode = "extend", the default for user files; "replace" ignores this file;
+# remove = ["kn"] deletes a default). Check it with `python -m inspector.vocab check FILE`, try it on a dataset with
+# `python -m inspector.vocab scan DATA.csv`.
+#
+# [suffix] entries:  name = { unit, canonical, dimension, ambiguous, alt }
+#   unit       pint unit of the value as written in the data. A unit declared in dataset metadata is matched against
+#              these strings exactly ("degC", not "celsius"), so every suffix needs a distinct string; for a synonym
+#              suffix use another pint spelling ("km/h" next to "kilometer/hour").
+#   canonical  pint unit all values of the dimension are converted to; one per dimension.
+#   dimension  label that groups suffixes.
+#   ambiguous  true for endings that are also ordinary words (_c, _m, _s, _min ...): accepted only if the name before
+#              the suffix contains a keyword of the dimension ([dimension.*] below).
+#   alt        sibling suffix the test-attack generator converts into (optional).
+# [dimension.NAME] keywords = [...] replaces that dimension's keywords in a user file, extra_keywords adds to them.
+#
+# Temperature is canonicalised to degC, not kelvin: that keeps the relative-difference similarity of values on
+# the same scale as the undefended comparison.
+
+mode = "replace"
+
+[suffix]
+
+# temperature (offset units; canonical unit is degC, see the note above) -> degC
+c = { unit = "degC", canonical = "degC", dimension = "temperature", ambiguous = true, alt = "f" }
+f = { unit = "degF", canonical = "degC", dimension = "temperature", ambiguous = true, alt = "c" }
+k = { unit = "kelvin", canonical = "degC", dimension = "temperature", ambiguous = true, alt = "f" }
+
+# speed -> meter/second
+kmh = { unit = "kilometer/hour", canonical = "meter/second", dimension = "speed", alt = "mph" }
+mph = { unit = "mile/hour", canonical = "meter/second", dimension = "speed", alt = "kmh" }
+ms = { unit = "meter/second", canonical = "meter/second", dimension = "speed", alt = "kmh" }
+kn = { unit = "knot", canonical = "meter/second", dimension = "speed", alt = "kmh" }
+
+# length (mm / cm / in also cover precipitation depth) -> meter
+km = { unit = "kilometer", canonical = "meter", dimension = "length", alt = "mi" }
+mi = { unit = "mile", canonical = "meter", dimension = "length", alt = "km" }
+m = { unit = "meter", canonical = "meter", dimension = "length", ambiguous = true, alt = "cm" }
+ft = { unit = "foot", canonical = "meter", dimension = "length", alt = "m" }
+cm = { unit = "centimeter", canonical = "meter", dimension = "length", alt = "mm" }
+mm = { unit = "millimeter", canonical = "meter", dimension = "length", alt = "cm" }
+in = { unit = "inch", canonical = "meter", dimension = "length" }
+
+# time / duration -> second
+s = { unit = "second", canonical = "second", dimension = "time", ambiguous = true, alt = "min" }
+min = { unit = "minute", canonical = "second", dimension = "time", ambiguous = true, alt = "h" }
+h = { unit = "hour", canonical = "second", dimension = "time", ambiguous = true, alt = "min" }
+
+# power -> watt
+mw = { unit = "megawatt", canonical = "watt", dimension = "power", alt = "kw" }
+kw = { unit = "kilowatt", canonical = "watt", dimension = "power", alt = "mw" }
+w = { unit = "watt", canonical = "watt", dimension = "power", ambiguous = true, alt = "kw" }
+
+# energy -> joule
+kwh = { unit = "kilowatt_hour", canonical = "joule", dimension = "energy", alt = "mwh" }
+mwh = { unit = "megawatt_hour", canonical = "joule", dimension = "energy", alt = "kwh" }
+
+# voltage -> volt
+v = { unit = "volt", canonical = "volt", dimension = "voltage", ambiguous = true, alt = "kv" }
+kv = { unit = "kilovolt", canonical = "volt", dimension = "voltage", alt = "v" }
+mv = { unit = "millivolt", canonical = "volt", dimension = "voltage", alt = "v" }
+
+# current -> ampere
+a = { unit = "ampere", canonical = "ampere", dimension = "current", ambiguous = true, alt = "ma" }
+ma = { unit = "milliampere", canonical = "ampere", dimension = "current", alt = "a" }
+
+# frequency -> hertz
+hz = { unit = "hertz", canonical = "hertz", dimension = "frequency", alt = "khz" }
+khz = { unit = "kilohertz", canonical = "hertz", dimension = "frequency", alt = "hz" }
+
+# reactive power -> var
+kvar = { unit = "kilovar", canonical = "var", dimension = "reactive_power", alt = "mvar" }
+mvar = { unit = "megavar", canonical = "var", dimension = "reactive_power", alt = "kvar" }
+
+# Name keywords per dimension (gate for ambiguous suffixes).
+[dimension.temperature]
+keywords = ["temp"]
+
+[dimension.length]
+keywords = ["dist", "length", "depth", "height", "altitude", "width", "range", "radius", "odometer", "wingspan", "span", "visibility"]
+
+[dimension.power]
+keywords = ["power", "load", "demand", "generation", "output", "consumption"]
+
+[dimension.voltage]
+keywords = ["volt"]
+
+[dimension.current]
+keywords = ["current", "amp"]
+
+[dimension.time]
+keywords = ["duration", "time", "elapsed", "sunshine", "runtime", "uptime"]
